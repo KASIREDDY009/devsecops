@@ -8,10 +8,14 @@ import com.plantcare.service.SensorDataService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
@@ -24,8 +28,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(SensorDataController.class)
-@AutoConfigureMockMvc(addFilters = false)
+@Import(SensorDataControllerTest.TestSecurityConfig.class)
 class SensorDataControllerTest {
+
+    static class TestSecurityConfig {
+        @Bean
+        public SecurityFilterChain testFilterChain(HttpSecurity http) throws Exception {
+            http.csrf(AbstractHttpConfigurer::disable)
+                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated());
+            return http.build();
+        }
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -100,5 +113,12 @@ class SensorDataControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    @DisplayName("GET /api/sensor-data/plant/{plantId} should return 401 without auth")
+    void getSensorData_Unauthenticated() throws Exception {
+        mockMvc.perform(get("/api/sensor-data/plant/1"))
+                .andExpect(status().isUnauthorized());
     }
 }

@@ -1,6 +1,7 @@
 package com.plantcare.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.plantcare.config.JwtAuthFilter;
 import com.plantcare.config.JwtService;
 import com.plantcare.dto.PlantRequest;
 import com.plantcare.model.Plant;
@@ -9,13 +10,16 @@ import com.plantcare.service.PlantService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.plantcare.config.JwtAuthFilter;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
@@ -23,26 +27,23 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/**
- * Integration tests for {@link PlantController} using MockMvc.
- *
- * <p>{@code @WebMvcTest} loads only the web layer (controller + security
- * filters), keeping tests fast by excluding the full application context.
- * Service dependencies are replaced with Mockito mocks.</p>
- *
- * <p><b>Original contribution:</b> controller-level tests verifying HTTP
- * status codes, JSON response structure, input validation, and security
- * enforcement for the plant management API.</p>
- */
 @WebMvcTest(PlantController.class)
-@AutoConfigureMockMvc(addFilters = false)
+@Import(PlantControllerTest.TestSecurityConfig.class)
 class PlantControllerTest {
+
+    static class TestSecurityConfig {
+        @Bean
+        public SecurityFilterChain testFilterChain(HttpSecurity http) throws Exception {
+            http.csrf(AbstractHttpConfigurer::disable)
+                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated());
+            return http.build();
+        }
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -104,6 +105,13 @@ class PlantControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/plants returns 401 without authentication")
+    void getAllPlants_returns401WhenUnauthenticated() throws Exception {
+        mockMvc.perform(get("/api/plants"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     @DisplayName("GET /api/plants/{id} returns 200 with the plant")
     void getPlantById_returns200() throws Exception {
         when(plantService.getPlantById(1L, 1L)).thenReturn(testPlant);
@@ -139,7 +147,7 @@ class PlantControllerTest {
     @DisplayName("POST /api/plants returns 400 when name is blank")
     void createPlant_returns400WhenNameBlank() throws Exception {
         PlantRequest request = new PlantRequest();
-        request.setName("");  // Invalid — blank
+        request.setName("");
         request.setSpecies("Monstera deliciosa");
 
         mockMvc.perform(post("/api/plants")
