@@ -251,7 +251,7 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
           EC2_IP=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=plantcare-backend" "Name=instance-state-name,Values=running" \
+            --filters "Name=tag:Name,Values=plantcare-server" "Name=instance-state-name,Values=running" \
             --query 'Reservations[0].Instances[0].PublicIpAddress' --output text 2>/dev/null) || true
           echo "ec2_ip=$EC2_IP" >> $GITHUB_OUTPUT
         continue-on-error: true
@@ -306,51 +306,22 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ── Fetch all resource info from AWS ──
-      - name: Get Infrastructure Outputs
+      # ── Get EC2 IP ──
+      - name: Get EC2 IP
         id: infra
         run: |
-          echo "============================================="
-          echo "  Fetching AWS Resource Info"
-          echo "============================================="
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-
-          # Get EC2 IP
           EC2_IP=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=plantcare-backend" "Name=instance-state-name,Values=running" \
+            --filters "Name=tag:Name,Values=plantcare-server" "Name=instance-state-name,Values=running" \
             --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
-
-          # Get S3 bucket
-          S3_BUCKET="plantcare-frontend-${ACCOUNT_ID}"
-
-          # Get CloudFront
-          CF_DIST_ID=$(aws cloudfront list-distributions \
-            --query "DistributionList.Items[?Comment=='plantcare-cdn'].Id" --output text)
-          CF_DOMAIN=$(aws cloudfront get-distribution --id $CF_DIST_ID \
-            --query 'Distribution.DomainName' --output text)
-
-          echo "EC2 IP:          $EC2_IP"
-          echo "S3 Bucket:       $S3_BUCKET"
-          echo "CloudFront:      $CF_DOMAIN"
-          echo "Distribution ID: $CF_DIST_ID"
-
+          echo "EC2 IP: $EC2_IP"
           echo "ec2_ip=$EC2_IP" >> $GITHUB_OUTPUT
-          echo "s3_bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
-          echo "cf_domain=$CF_DOMAIN" >> $GITHUB_OUTPUT
-          echo "cf_dist_id=$CF_DIST_ID" >> $GITHUB_OUTPUT
 
-      # ── Get SSH Key from SSM Parameter Store ──
+      # ── Get SSH Key ──
       - name: Retrieve SSH Key
         run: |
-          aws ssm get-parameter \
-            --name "/ec2/keypair/plantcare" \
-            --with-decryption \
-            --query 'Parameter.Value' \
-            --output text > ec2_key.pem
-
+          aws ssm get-parameter --name "/plantcare/ec2-key" \
+            --with-decryption --query 'Parameter.Value' --output text > ec2_key.pem
           chmod 600 ec2_key.pem
-
-          # Add EC2 to known hosts
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ steps.infra.outputs.ec2_ip }} >> ~/.ssh/known_hosts 2>/dev/null
 
@@ -368,70 +339,56 @@ jobs:
         run: npm run build
         working-directory: frontend/
         env:
-          REACT_APP_API_URL: https://${{ steps.infra.outputs.cf_domain }}/api
+          REACT_APP_API_URL: http://${{ steps.infra.outputs.ec2_ip }}/api
 
-      # ── Deploy Backend to EC2 ──
-      - name: Copy JAR to EC2
+      # ── Deploy to EC2 ──
+      - name: Deploy Backend JAR
         run: |
           scp -i ec2_key.pem -o StrictHostKeyChecking=no \
             backend/target/*.jar \
-            ec2-user@${{ steps.infra.outputs.ec2_ip }}:/tmp/plantcare-app.jar
+            ec2-user@${{ steps.infra.outputs.ec2_ip }}:/tmp/app.jar
 
-      - name: Deploy and Restart Backend
+      - name: Deploy Frontend Build
+        run: |
+          tar -czf /tmp/frontend.tar.gz -C frontend/build .
+          scp -i ec2_key.pem -o StrictHostKeyChecking=no \
+            /tmp/frontend.tar.gz \
+            ec2-user@${{ steps.infra.outputs.ec2_ip }}:/tmp/frontend.tar.gz
+
+      - name: Start Application
         run: |
           ssh -i ec2_key.pem -o StrictHostKeyChecking=no \
             ec2-user@${{ steps.infra.outputs.ec2_ip }} << 'ENDSSH'
 
-            echo "=== Deploying Plant Care Backend ==="
+            # Deploy backend
+            sudo mv /tmp/app.jar /opt/plantcare/app.jar
+            sudo chown plantcare:plantcare /opt/plantcare/app.jar
 
-            # Move JAR to application directory
-            sudo mv /tmp/plantcare-app.jar /opt/plantcare/plantcare-app.jar
-            sudo chown plantcare:plantcare /opt/plantcare/plantcare-app.jar
+            # Deploy frontend
+            sudo rm -rf /var/www/plantcare/*
+            sudo tar -xzf /tmp/frontend.tar.gz -C /var/www/plantcare/
+            sudo chown -R nginx:nginx /var/www/plantcare/
 
-            # Restart the application
-            sudo systemctl stop plantcare || true
-            sudo systemctl start plantcare
-            sudo systemctl enable plantcare
+            # Restart services
+            sudo systemctl restart plantcare || sudo systemctl start plantcare
+            sudo systemctl restart nginx
 
-            # Wait and verify
-            sleep 10
-            sudo systemctl status plantcare --no-pager
-
-            echo "=== Backend Deployment Complete ==="
+            sleep 5
+            sudo systemctl status plantcare --no-pager || true
+            echo "=== Deployment Complete ==="
           ENDSSH
 
-      # ── Deploy Frontend to S3 ──
-      - name: Deploy Frontend to S3
-        run: |
-          aws s3 sync frontend/build/ s3://${{ steps.infra.outputs.s3_bucket }} --delete
-          echo "Frontend deployed to S3: ${{ steps.infra.outputs.s3_bucket }}"
-
-      # ── Invalidate CloudFront Cache ──
-      - name: Invalidate CloudFront Cache
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ steps.infra.outputs.cf_dist_id }} \
-            --paths "/*"
-          echo "CloudFront cache invalidated"
-
-      # ── Cleanup ──
       - name: Clean up SSH key
         if: always()
         run: rm -f ec2_key.pem
 
-      # ── Verify ──
       - name: Verify Deployment
         run: |
           echo "============================================="
           echo "  Deployment Complete!"
           echo "============================================="
-          echo ""
-          echo "  Application URL: https://${{ steps.infra.outputs.cf_domain }}"
-          echo "  Backend API:     https://${{ steps.infra.outputs.cf_domain }}/api"
-          echo "  EC2 Direct:      http://${{ steps.infra.outputs.ec2_ip }}:8080"
-          echo ""
-          echo "  Verifying backend health..."
-          sleep 15
-          curl -f -s http://${{ steps.infra.outputs.ec2_ip }}:8080/api/actuator/health || echo "Health check pending — service may still be starting"
-          echo ""
+          echo "  App: http://${{ steps.infra.outputs.ec2_ip }}"
+          echo "  API: http://${{ steps.infra.outputs.ec2_ip }}/api"
           echo "============================================="
+          sleep 10
+          curl -s http://${{ steps.infra.outputs.ec2_ip }} | head -5 || echo "Starting up..."
