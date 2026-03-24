@@ -1,0 +1,110 @@
+name: Setup AWS Infrastructure
+
+# Manual trigger only — run once to create all AWS resources
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+          - deploy
+          - destroy
+
+env:
+  AWS_REGION: us-east-1
+  STACK_NAME: plantcare-stack
+
+jobs:
+  infrastructure:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ── Deploy Infrastructure ──
+      - name: Deploy CloudFormation Stack
+        if: ${{ github.event.inputs.action == 'deploy' }}
+        run: |
+          echo "============================================="
+          echo "  Deploying AWS Infrastructure"
+          echo "============================================="
+
+          aws cloudformation deploy \
+            --template-file cloudformation/infrastructure.yml \
+            --stack-name ${{ env.STACK_NAME }} \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              EnvironmentName=plantcare \
+              InstanceType=t2.micro \
+              DBInstanceClass=db.t3.micro
+
+          echo ""
+          echo "Stack deployment initiated. Waiting for completion..."
+
+      - name: Wait for Stack Completion
+        if: ${{ github.event.inputs.action == 'deploy' }}
+        run: |
+          aws cloudformation wait stack-create-complete \
+            --stack-name ${{ env.STACK_NAME }} 2>/dev/null || \
+          aws cloudformation wait stack-update-complete \
+            --stack-name ${{ env.STACK_NAME }} 2>/dev/null || \
+          echo "Stack already up to date"
+
+      - name: Display Stack Outputs
+        if: ${{ github.event.inputs.action == 'deploy' }}
+        run: |
+          echo "============================================="
+          echo "  AWS Infrastructure Outputs"
+          echo "============================================="
+
+          aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue]' \
+            --output table
+
+          echo ""
+          echo "============================================="
+          echo "  Your Application URL:"
+          APP_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`ApplicationURL`].OutputValue' \
+            --output text)
+          echo "  $APP_URL"
+          echo "============================================="
+
+      # ── Destroy Infrastructure ──
+      - name: Destroy CloudFormation Stack
+        if: ${{ github.event.inputs.action == 'destroy' }}
+        run: |
+          echo "============================================="
+          echo "  WARNING: Destroying ALL AWS Resources"
+          echo "============================================="
+
+          # Empty S3 bucket first (CF can't delete non-empty buckets)
+          BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`S3BucketName`].OutputValue' \
+            --output text 2>/dev/null) || true
+
+          if [ -n "$BUCKET" ] && [ "$BUCKET" != "None" ]; then
+            echo "Emptying S3 bucket: $BUCKET"
+            aws s3 rm s3://$BUCKET --recursive || true
+          fi
+
+          aws cloudformation delete-stack --stack-name ${{ env.STACK_NAME }}
+          echo "Stack deletion initiated. Waiting..."
+          aws cloudformation wait stack-delete-complete --stack-name ${{ env.STACK_NAME }}
+          echo "Stack deleted successfully."
