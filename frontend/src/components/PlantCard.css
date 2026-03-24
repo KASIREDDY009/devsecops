@@ -1,0 +1,97 @@
+/**
+ * PlantCard Styles
+ * Card component with hover effects and colour-coded health status badges.
+ */
+
+.plant-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 1px solid #e8f5e9;
+  position: relative;
+  overflow: hidden;
+}
+
+.plant-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(45, 106, 79, 0.15);
+}
+
+/* Health status badge positioned at top-right */
+.plant-card-status {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.75rem;
+}
+
+/* Green badge for healthy plants */
+.status-healthy {
+  background: #d4edda;
+  color: #155724;
+}
+
+/* Orange badge for plants needing attention */
+.status-attention {
+  background: #fff3cd;
+  color: #856404;
+}
+
+/* Red badge for critical plants */
+.status-critical {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* Grey badge for unknown status */
+.status-unknown {
+  background: #e2e3e5;
+  color: #383d41;
+}
+
+.plant-card-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1b4332;
+  margin: 0 0 0.25rem 0;
+}
+
+.plant-card-species {
+  font-size: 0.95rem;
+  color: #6c757d;
+  font-style: italic;
+  margin: 0 0 1rem 0;
+}
+
+.plant-card-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-top: 1px solid #e8f5e9;
+  padding-top: 0.75rem;
+}
+
+.plant-card-detail {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detail-label {
+  font-size: 0.85rem;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.detail-value {
+  font-size: 0.85rem;
+  color: #2d6a4f;
+  font-weight: 600;
+}

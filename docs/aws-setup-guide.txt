@@ -1,0 +1,188 @@
+==============================================================================
+  AWS Setup Guide - Automated Plant Care Monitoring System
+==============================================================================
+
+This guide lists all AWS resources required to deploy and run the
+Plant Care Monitoring System.
+
+------------------------------------------------------------------------------
+1. EC2 INSTANCE (Backend Server)
+------------------------------------------------------------------------------
+  - AMI:             Amazon Linux 2 (latest)
+  - Instance type:   t2.micro (Free Tier eligible)
+  - Key pair:        Create a new key pair (e.g., plantcare-key.pem)
+  - Storage:         8 GB gp3 (default)
+
+  Security Group (plantcare-backend-sg):
+    Inbound Rules:
+      - SSH (22)     : Your IP only (for administration)
+      - HTTP (80)    : 0.0.0.0/0 (nginx reverse proxy)
+      - HTTPS (443)  : 0.0.0.0/0 (nginx reverse proxy with SSL)
+      - Custom (8080): Security group self-reference only (Spring Boot)
+    Outbound Rules:
+      - All traffic  : 0.0.0.0/0
+
+  Post-launch setup:
+    sudo yum update -y
+    sudo amazon-linux-extras install java-openjdk17 -y
+    sudo amazon-linux-extras install nginx1 -y
+    sudo mkdir -p /opt/plantcare
+    sudo systemctl enable nginx
+    sudo systemctl start nginx
+
+  Create systemd service (/etc/systemd/system/plantcare.service):
+    [Unit]
+    Description=Plant Care Monitoring System Backend
+    After=network.target
+
+    [Service]
+    Type=simple
+    User=root
+    ExecStart=/usr/bin/java -jar /opt/plantcare/plantcare-app.jar \
+      --spring.datasource.password=${RDS_PASSWORD} \
+      --app.jwt-secret=${JWT_SECRET}
+    Restart=always
+    RestartSec=10
+
+    [Install]
+    WantedBy=multi-user.target
+
+------------------------------------------------------------------------------
+2. RDS POSTGRESQL (Database)
+------------------------------------------------------------------------------
+  - Engine:          PostgreSQL 15
+  - Instance class:  db.t3.micro (Free Tier eligible)
+  - Storage:         20 GB gp2
+  - Database name:   plantcare
+  - Master username: plantcare_admin
+  - Master password: (store in GitHub Secrets as RDS_PASSWORD)
+  - Public access:   No (only accessible from EC2 security group)
+
+  Security Group (plantcare-db-sg):
+    Inbound Rules:
+      - PostgreSQL (5432): Source = plantcare-backend-sg (EC2 security group)
+    Outbound Rules:
+      - All traffic  : 0.0.0.0/0
+
+  After creation, note the RDS endpoint:
+    e.g., plantcare-db.xxxxxxxxxxxx.us-east-1.rds.amazonaws.com
+
+  Configure in Spring Boot application.properties:
+    spring.datasource.url=jdbc:postgresql://<rds-endpoint>:5432/plantcare
+    spring.datasource.username=plantcare_admin
+    spring.datasource.password=${RDS_PASSWORD}
+
+------------------------------------------------------------------------------
+3. S3 BUCKET (Frontend Hosting)
+------------------------------------------------------------------------------
+  - Bucket name:     plantcare-frontend-<account-id> (must be globally unique)
+  - Region:          us-east-1
+  - Block public access: Keep enabled (CloudFront will access via OAI)
+  - Static website hosting: Enabled
+    - Index document: index.html
+    - Error document: index.html (for React Router support)
+
+  Bucket policy (allow CloudFront OAI access):
+    {
+      "Version": "2012-10-17",
+      "Statement": [{
+        "Sid": "AllowCloudFrontOAI",
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity <OAI-ID>"
+        },
+        "Action": "s3:GetObject",
+        "Resource": "arn:aws:s3:::plantcare-frontend-<account-id>/*"
+      }]
+    }
+
+------------------------------------------------------------------------------
+4. CLOUDFRONT DISTRIBUTION (CDN)
+------------------------------------------------------------------------------
+  - Origin 1 (Frontend):
+      Domain: plantcare-frontend-<account-id>.s3.amazonaws.com
+      Origin Access Identity: Create new OAI
+      Viewer Protocol Policy: Redirect HTTP to HTTPS
+
+  - Origin 2 (Backend API):
+      Domain: <EC2-public-dns>
+      Protocol: HTTP only
+      Port: 80
+
+  - Behaviors:
+      Default (*):
+        Origin: S3 (frontend)
+        Cache Policy: CachingOptimized
+        Viewer Protocol Policy: Redirect HTTP to HTTPS
+
+      /api/*:
+        Origin: EC2 (backend)
+        Cache Policy: CachingDisabled
+        Allowed HTTP Methods: GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE
+        Viewer Protocol Policy: Redirect HTTP to HTTPS
+
+  - Default Root Object: index.html
+
+  - Custom Error Responses:
+      403 -> /index.html (200) -- for React Router
+      404 -> /index.html (200) -- for React Router
+
+  Note the Distribution ID for GitHub Secrets (CLOUDFRONT_DISTRIBUTION_ID).
+
+------------------------------------------------------------------------------
+5. IAM USER (CI/CD Permissions)
+------------------------------------------------------------------------------
+  - Username:        plantcare-cicd
+  - Access type:     Programmatic access (Access Key + Secret Key)
+
+  Attach inline policy (PlantCareCICDPolicy):
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "S3DeployAccess",
+          "Effect": "Allow",
+          "Action": [
+            "s3:PutObject",
+            "s3:GetObject",
+            "s3:DeleteObject",
+            "s3:ListBucket"
+          ],
+          "Resource": [
+            "arn:aws:s3:::plantcare-frontend-<account-id>",
+            "arn:aws:s3:::plantcare-frontend-<account-id>/*"
+          ]
+        },
+        {
+          "Sid": "CloudFrontInvalidation",
+          "Effect": "Allow",
+          "Action": [
+            "cloudfront:CreateInvalidation",
+            "cloudfront:GetInvalidation"
+          ],
+          "Resource": "arn:aws:cloudfront::<account-id>:distribution/<distribution-id>"
+        }
+      ]
+    }
+
+  Store the Access Key ID and Secret Access Key in GitHub Secrets.
+
+------------------------------------------------------------------------------
+6. SECURITY GROUPS SUMMARY
+------------------------------------------------------------------------------
+  plantcare-backend-sg (EC2):
+    Inbound:  22 (SSH, your IP), 80 (HTTP), 443 (HTTPS), 8080 (self-ref)
+    Outbound: All
+
+  plantcare-db-sg (RDS):
+    Inbound:  5432 (PostgreSQL, from plantcare-backend-sg)
+    Outbound: All
+
+------------------------------------------------------------------------------
+  ESTIMATED MONTHLY COST (Free Tier eligible for first 12 months):
+    EC2 t2.micro   : Free (750 hrs/mo)
+    RDS db.t3.micro: Free (750 hrs/mo)
+    S3             : Free (5 GB storage, 20k GET, 2k PUT)
+    CloudFront     : Free (1 TB transfer, 10M requests)
+    After Free Tier: ~$25-40/month
+==============================================================================

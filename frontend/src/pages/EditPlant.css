@@ -1,0 +1,10 @@
+/**
+ * EditPlant Page Styles
+ * Reuses form-card layout from AddPlant with consistent theme.
+ */
+
+.edit-plant-container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 2rem;
+}

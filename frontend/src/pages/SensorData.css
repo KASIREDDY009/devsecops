@@ -1,0 +1,107 @@
+/**
+ * SensorData Page Styles
+ * Combines a form card and a data table with the green nature theme.
+ */
+
+.sensor-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.page-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #1b4332;
+  margin: 0 0 1.5rem 0;
+}
+
+.section-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1b4332;
+  margin: 0 0 1rem 0;
+}
+
+/* Form card for adding new sensor readings */
+.sensor-form-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 4px 20px rgba(45, 106, 79, 0.1);
+  margin-bottom: 2rem;
+}
+
+/* Two-column grid layout for sensor input fields */
+.sensor-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.sensor-submit {
+  margin-top: 1.25rem;
+  max-width: 220px;
+}
+
+/* History card containing the data table */
+.sensor-history-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 4px 20px rgba(45, 106, 79, 0.1);
+}
+
+/* Responsive table wrapper with horizontal scroll on small screens */
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.sensor-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.sensor-table thead {
+  background: #f0faf4;
+}
+
+.sensor-table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  color: #2d6a4f;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #d8f3dc;
+}
+
+.sensor-table td {
+  padding: 0.75rem 1rem;
+  color: #1b4332;
+  border-bottom: 1px solid #e8f5e9;
+}
+
+.sensor-table tbody tr:hover {
+  background: #f8fdf9;
+}
+
+.no-data-msg {
+  color: #6c757d;
+  font-style: italic;
+  text-align: center;
+  padding: 2rem 0;
+}
+
+/* Responsive: stack form fields on small screens */
+@media (max-width: 600px) {
+  .sensor-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sensor-submit {
+    max-width: 100%;
+  }
+}

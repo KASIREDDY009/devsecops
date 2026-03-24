@@ -1,0 +1,45 @@
+# =============================================================================
+# Systemd Service Unit — Plant Care Monitoring Backend
+# =============================================================================
+# Install on EC2:
+#   sudo cp plantcare.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable plantcare
+#   sudo systemctl start plantcare
+# =============================================================================
+
+[Unit]
+Description=Plant Care Monitoring System — Spring Boot Backend
+After=network.target
+
+[Service]
+Type=simple
+User=plantcare
+Group=plantcare
+WorkingDirectory=/opt/plantcare
+
+ExecStart=/usr/bin/java -jar \
+    -Dspring.profiles.active=prod \
+    -Dserver.port=8080 \
+    /opt/plantcare/plantcare-app.jar
+
+# Environment variables for production
+Environment=DB_HOST=${DB_HOST}
+Environment=DB_PORT=5432
+Environment=DB_NAME=plantcare
+Environment=DB_USER=${DB_USER}
+Environment=DB_PASSWORD=${DB_PASSWORD}
+Environment=JWT_SECRET=${JWT_SECRET}
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+SuccessExitStatus=143
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=plantcare
+
+[Install]
+WantedBy=multi-user.target

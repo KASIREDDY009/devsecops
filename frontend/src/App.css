@@ -1,0 +1,63 @@
+/**
+ * App-level Global Styles
+ * -----------------------
+ * Provides base typography, reset, and layout for the entire application.
+ * Uses a green/nature colour palette appropriate for a plant monitoring app.
+ *
+ * MSc Cloud DevOpsSec — Automated Plant Care Monitoring System
+ */
+
+/* CSS Reset and Base Styles */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell',
+    'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f5faf7;
+  color: #1b4332;
+  line-height: 1.6;
+}
+
+/* Main content area sits below the sticky navbar */
+.app-content {
+  min-height: calc(100vh - 64px);
+}
+
+/* Utility: hide scrollbar but keep scrolling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f0faf4;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #95d5b2;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #74c69d;
+}
+
+/* Global link styling */
+a {
+  color: #2d6a4f;
+  transition: color 0.2s;
+}
+
+a:hover {
+  color: #1b4332;
+}
+
+/* Shared form styles (imported by multiple pages via Login.css) */
+/* These are defined in Login.css and reused across all form pages */
