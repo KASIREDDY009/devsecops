@@ -10,7 +10,6 @@ env:
   JAVA_VERSION: '17'
   NODE_VERSION: '18'
   AWS_REGION: us-east-1
-  STACK_NAME: plantcare-stack
 
 jobs:
   # ──────────────────────────────────────────────
@@ -251,10 +250,9 @@ jobs:
         id: get-ec2
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
-          EC2_IP=$(aws cloudformation describe-stacks \
-            --stack-name ${{ env.STACK_NAME }} \
-            --query 'Stacks[0].Outputs[?OutputKey==`EC2PublicIP`].OutputValue' \
-            --output text 2>/dev/null) || true
+          EC2_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=plantcare-backend" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' --output text 2>/dev/null) || true
           echo "ec2_ip=$EC2_IP" >> $GITHUB_OUTPUT
         continue-on-error: true
 
@@ -308,44 +306,44 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ── Fetch all resource info from CloudFormation ──
+      # ── Fetch all resource info from AWS ──
       - name: Get Infrastructure Outputs
         id: infra
         run: |
           echo "============================================="
-          echo "  Fetching CloudFormation Stack Outputs"
+          echo "  Fetching AWS Resource Info"
           echo "============================================="
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-          get_output() {
-            aws cloudformation describe-stacks \
-              --stack-name ${{ env.STACK_NAME }} \
-              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" \
-              --output text
-          }
+          # Get EC2 IP
+          EC2_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=plantcare-backend" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
 
-          EC2_IP=$(get_output "EC2PublicIP")
-          S3_BUCKET=$(get_output "S3BucketName")
-          CF_DOMAIN=$(get_output "CloudFrontDomainName")
-          CF_DIST_ID=$(get_output "CloudFrontDistributionId")
-          KEYPAIR_ID=$(get_output "KeyPairId")
+          # Get S3 bucket
+          S3_BUCKET="plantcare-frontend-${ACCOUNT_ID}"
+
+          # Get CloudFront
+          CF_DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?Comment=='plantcare-cdn'].Id" --output text)
+          CF_DOMAIN=$(aws cloudfront get-distribution --id $CF_DIST_ID \
+            --query 'Distribution.DomainName' --output text)
 
           echo "EC2 IP:          $EC2_IP"
           echo "S3 Bucket:       $S3_BUCKET"
           echo "CloudFront:      $CF_DOMAIN"
           echo "Distribution ID: $CF_DIST_ID"
-          echo "KeyPair ID:      $KEYPAIR_ID"
 
           echo "ec2_ip=$EC2_IP" >> $GITHUB_OUTPUT
           echo "s3_bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
           echo "cf_domain=$CF_DOMAIN" >> $GITHUB_OUTPUT
           echo "cf_dist_id=$CF_DIST_ID" >> $GITHUB_OUTPUT
-          echo "keypair_id=$KEYPAIR_ID" >> $GITHUB_OUTPUT
 
       # ── Get SSH Key from SSM Parameter Store ──
       - name: Retrieve SSH Key
         run: |
           aws ssm get-parameter \
-            --name "/ec2/keypair/${{ steps.infra.outputs.keypair_id }}" \
+            --name "/ec2/keypair/plantcare" \
             --with-decryption \
             --query 'Parameter.Value' \
             --output text > ec2_key.pem
