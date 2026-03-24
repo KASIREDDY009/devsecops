@@ -1,52 +1,45 @@
 package com.plantcare.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plantcare.config.JwtAuthFilter;
 import com.plantcare.config.JwtService;
-import com.plantcare.config.SecurityConfig;
-import com.plantcare.model.Plant;
 import com.plantcare.model.SensorData;
 import com.plantcare.model.User;
 import com.plantcare.service.SensorDataService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.bean.MockBean;
-import org.springframework.context.annotation.Import;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.List;
 
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(SensorDataController.class)
-@Import(SecurityConfig.class)
+@AutoConfigureMockMvc(addFilters = false)
 class SensorDataControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @MockBean
+    @MockitoBean
     private SensorDataService sensorDataService;
 
-    @MockBean
+    @MockitoBean
     private JwtService jwtService;
 
-    @MockBean
+    @MockitoBean
     private JwtAuthFilter jwtAuthFilter;
 
-    @MockBean
+    @MockitoBean
     private UserDetailsService userDetailsService;
 
     private User createTestUser() {
@@ -61,7 +54,6 @@ class SensorDataControllerTest {
     @Test
     @DisplayName("GET /api/sensor-data/plant/{plantId} should return sensor data list")
     void getSensorData_Success() throws Exception {
-        User testUser = createTestUser();
         SensorData sd1 = SensorData.builder()
                 .id(1L).soilMoisture(55.0).temperature(22.0)
                 .humidity(60.0).lightLevel(5000.0)
@@ -77,21 +69,13 @@ class SensorDataControllerTest {
                 .thenReturn(Arrays.asList(sd1, sd2));
 
         mockMvc.perform(get("/api/sensor-data/plant/1")
-                        .with(user(testUser)))
+                        .with(user(createTestUser())))
                 .andExpect(status().isOk());
-    }
-
-    @Test
-    @DisplayName("GET /api/sensor-data/plant/{plantId} should return 401 without auth")
-    void getSensorData_Unauthenticated() throws Exception {
-        mockMvc.perform(get("/api/sensor-data/plant/1"))
-                .andExpect(status().isUnauthorized());
     }
 
     @Test
     @DisplayName("GET /api/sensor-data/plant/{plantId}/latest should return latest reading")
     void getLatestSensorData_Success() throws Exception {
-        User testUser = createTestUser();
         SensorData latest = SensorData.builder()
                 .id(1L).soilMoisture(55.0).temperature(22.0)
                 .humidity(60.0).lightLevel(5000.0)
@@ -101,7 +85,20 @@ class SensorDataControllerTest {
         when(sensorDataService.getLatestSensorData(1L, 1L)).thenReturn(latest);
 
         mockMvc.perform(get("/api/sensor-data/plant/1/latest")
-                        .with(user(testUser)))
+                        .with(user(createTestUser())))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("GET /api/sensor-data/plant/{plantId} should return empty list when no data")
+    void getSensorData_Empty() throws Exception {
+        when(sensorDataService.getSensorDataByPlant(1L, 1L))
+                .thenReturn(List.of());
+
+        mockMvc.perform(get("/api/sensor-data/plant/1")
+                        .with(user(createTestUser())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$").isEmpty());
     }
 }

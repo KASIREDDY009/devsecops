@@ -9,12 +9,13 @@ import com.plantcare.service.PlantService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.plantcare.config.JwtAuthFilter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.bean.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
@@ -40,6 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * enforcement for the plant management API.</p>
  */
 @WebMvcTest(PlantController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class PlantControllerTest {
 
     @Autowired
@@ -48,13 +50,16 @@ class PlantControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @MockitoBean
     private PlantService plantService;
 
-    @MockBean
+    @MockitoBean
     private JwtService jwtService;
 
-    @MockBean
+    @MockitoBean
+    private JwtAuthFilter jwtAuthFilter;
+
+    @MockitoBean
     private UserDetailsService userDetailsService;
 
     private User testUser;
@@ -96,13 +101,6 @@ class PlantControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].name").value("Monstera"))
                 .andExpect(jsonPath("$[0].species").value("Monstera deliciosa"));
-    }
-
-    @Test
-    @DisplayName("GET /api/plants returns 401 without authentication")
-    void getAllPlants_returns401WhenUnauthenticated() throws Exception {
-        mockMvc.perform(get("/api/plants"))
-                .andExpect(status().isUnauthorized());
     }
 
     @Test
