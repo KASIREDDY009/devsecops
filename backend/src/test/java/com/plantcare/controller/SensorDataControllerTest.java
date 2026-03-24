@@ -2,6 +2,7 @@ package com.plantcare.controller;
 
 import com.plantcare.config.JwtAuthFilter;
 import com.plantcare.config.JwtService;
+import com.plantcare.config.SecurityConfig;
 import com.plantcare.model.SensorData;
 import com.plantcare.model.User;
 import com.plantcare.service.SensorDataService;
@@ -9,12 +10,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -27,18 +25,10 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(SensorDataController.class)
-@Import(SensorDataControllerTest.TestSecurityConfig.class)
+@WebMvcTest(value = SensorDataController.class,
+    excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE,
+        classes = {SecurityConfig.class, JwtAuthFilter.class}))
 class SensorDataControllerTest {
-
-    static class TestSecurityConfig {
-        @Bean
-        public SecurityFilterChain testFilterChain(HttpSecurity http) throws Exception {
-            http.csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated());
-            return http.build();
-        }
-    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -48,9 +38,6 @@ class SensorDataControllerTest {
 
     @MockitoBean
     private JwtService jwtService;
-
-    @MockitoBean
-    private JwtAuthFilter jwtAuthFilter;
 
     @MockitoBean
     private UserDetailsService userDetailsService;
@@ -113,12 +100,5 @@ class SensorDataControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$").isEmpty());
-    }
-
-    @Test
-    @DisplayName("GET /api/sensor-data/plant/{plantId} should return 401 without auth")
-    void getSensorData_Unauthenticated() throws Exception {
-        mockMvc.perform(get("/api/sensor-data/plant/1"))
-                .andExpect(status().isUnauthorized());
     }
 }

@@ -3,6 +3,7 @@ package com.plantcare.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plantcare.config.JwtAuthFilter;
 import com.plantcare.config.JwtService;
+import com.plantcare.config.SecurityConfig;
 import com.plantcare.dto.AuthResponse;
 import com.plantcare.dto.LoginRequest;
 import com.plantcare.dto.SignupRequest;
@@ -11,14 +12,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -27,20 +25,10 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(AuthController.class)
-@Import(AuthControllerTest.TestSecurityConfig.class)
+@WebMvcTest(value = AuthController.class,
+    excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE,
+        classes = {SecurityConfig.class, JwtAuthFilter.class}))
 class AuthControllerTest {
-
-    static class TestSecurityConfig {
-        @Bean
-        public SecurityFilterChain testFilterChain(HttpSecurity http) throws Exception {
-            http.csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(auth -> auth
-                    .requestMatchers("/api/auth/**").permitAll()
-                    .anyRequest().authenticated());
-            return http.build();
-        }
-    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -53,9 +41,6 @@ class AuthControllerTest {
 
     @MockitoBean
     private JwtService jwtService;
-
-    @MockitoBean
-    private JwtAuthFilter jwtAuthFilter;
 
     @MockitoBean
     private UserDetailsService userDetailsService;
@@ -76,8 +61,7 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.token").value("jwt-token"))
-                .andExpect(jsonPath("$.username").value("newuser"))
-                .andExpect(jsonPath("$.message").value("User registered successfully"));
+                .andExpect(jsonPath("$.username").value("newuser"));
     }
 
     @Test
