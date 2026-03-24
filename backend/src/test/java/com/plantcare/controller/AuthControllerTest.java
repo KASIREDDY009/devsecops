@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -57,6 +58,7 @@ class AuthControllerTest {
         when(authService.signup(any(SignupRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/auth/signup")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -70,6 +72,7 @@ class AuthControllerTest {
         SignupRequest request = new SignupRequest("", "", "");
 
         mockMvc.perform(post("/api/auth/signup")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
@@ -87,6 +90,7 @@ class AuthControllerTest {
         when(authService.login(any(LoginRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/auth/login")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -102,6 +106,7 @@ class AuthControllerTest {
                 .thenThrow(new BadCredentialsException("Bad credentials"));
 
         mockMvc.perform(post("/api/auth/login")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized());
@@ -113,6 +118,7 @@ class AuthControllerTest {
         SignupRequest request = new SignupRequest("ab", "test@example.com", "password123");
 
         mockMvc.perform(post("/api/auth/signup")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
@@ -124,6 +130,7 @@ class AuthControllerTest {
         SignupRequest request = new SignupRequest("testuser", "not-an-email", "password123");
 
         mockMvc.perform(post("/api/auth/signup")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());

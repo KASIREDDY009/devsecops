@@ -27,6 +27,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -118,6 +119,7 @@ class PlantControllerTest {
 
         mockMvc.perform(post("/api/plants")
                         .with(user(testUser))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -133,6 +135,7 @@ class PlantControllerTest {
 
         mockMvc.perform(post("/api/plants")
                         .with(user(testUser))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
@@ -142,7 +145,8 @@ class PlantControllerTest {
     @DisplayName("DELETE /api/plants/{id} returns 204 on success")
     void deletePlant_returns204() throws Exception {
         mockMvc.perform(delete("/api/plants/1")
-                        .with(user(testUser)))
+                        .with(user(testUser))
+                        .with(csrf()))
                 .andExpect(status().isNoContent());
     }
 }
