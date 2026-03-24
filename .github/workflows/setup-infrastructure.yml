@@ -71,6 +71,17 @@ jobs:
           echo ""
           echo "Stack deployment initiated. Waiting for completion..."
 
+      - name: Show Stack Errors (if failed)
+        if: failure()
+        run: |
+          echo "============================================="
+          echo "  CloudFormation Stack Events (FAILED)"
+          echo "============================================="
+          aws cloudformation describe-stack-events \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' \
+            --output table 2>/dev/null || true
+
       - name: Wait for Stack Completion
         if: ${{ github.event.inputs.action == 'deploy' }}
         run: |

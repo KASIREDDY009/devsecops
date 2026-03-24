@@ -5,47 +5,34 @@ Description: >
   PostgreSQL runs on EC2 (no RDS needed).
   MSc Cloud DevOpsSec Project
 
-# ============================================================
-# Parameters
-# ============================================================
 Parameters:
   EnvironmentName:
     Type: String
     Default: plantcare
-    Description: Name prefix for all resources
 
   InstanceType:
     Type: String
     Default: t2.micro
     AllowedValues: [t2.micro, t2.small, t3.micro]
-    Description: EC2 instance type (t2.micro = free tier)
 
   DBPassword:
     Type: String
     Default: PlantCare2024Secure
     NoEcho: true
     MinLength: 8
-    Description: PostgreSQL database password
 
   JWTSecret:
     Type: String
     Default: cGxhbnRjYXJlLW1vbml0b3Jpbmctand0LXNlY3JldC1rZXktZm9yLXByb2R1Y3Rpb24tMjAyNC1tc2MtcHJvamVjdC1zZWN1cmU=
     NoEcho: true
-    Description: Base64-encoded JWT signing key (min 256 bits)
 
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
-    Description: Latest Amazon Linux 2023 AMI
 
-# ============================================================
-# Resources
-# ============================================================
 Resources:
 
-  # ──────────────────────────────────────────────
-  # 1. VPC & Networking
-  # ──────────────────────────────────────────────
+  # ── VPC & Networking ──
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -58,10 +45,6 @@ Resources:
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-igw
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -76,17 +59,11 @@ Resources:
       CidrBlock: 10.0.1.0/24
       AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-public-subnet
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-public-rt
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -102,42 +79,31 @@ Resources:
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref PublicRouteTable
 
-  # ──────────────────────────────────────────────
-  # 2. Security Group
-  # ──────────────────────────────────────────────
+  # ── Security Group ──
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP, HTTPS, SSH, and Spring Boot
+      GroupDescription: PlantCare EC2 Security Group
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: 0.0.0.0/0
-          Description: SSH access
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-          Description: HTTP
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
-          Description: HTTPS
         - IpProtocol: tcp
           FromPort: 8080
           ToPort: 8080
           CidrIp: 0.0.0.0/0
-          Description: Spring Boot
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-ec2-sg
 
-  # ──────────────────────────────────────────────
-  # 3. IAM Role for EC2
-  # ──────────────────────────────────────────────
+  # ── IAM ──
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -160,21 +126,14 @@ Resources:
       Roles:
         - !Ref EC2Role
 
-  # ──────────────────────────────────────────────
-  # 4. EC2 Key Pair
-  # ──────────────────────────────────────────────
+  # ── Key Pair ──
   EC2KeyPair:
     Type: AWS::EC2::KeyPair
     Properties:
       KeyName: !Sub ${EnvironmentName}-keypair
       KeyType: rsa
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-keypair
 
-  # ──────────────────────────────────────────────
-  # 5. EC2 Instance (Backend + PostgreSQL)
-  # ──────────────────────────────────────────────
+  # ── EC2 Instance ──
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
@@ -196,35 +155,36 @@ Resources:
 
           echo "=== Plant Care EC2 Setup ==="
 
-          # 1. Install Java 17
+          # Install Java 17
           yum install -y java-17-amazon-corretto-headless
 
-          # 2. Install PostgreSQL 15
+          # Install PostgreSQL 15
           yum install -y postgresql15-server postgresql15
           postgresql-setup --initdb
           systemctl enable postgresql
           systemctl start postgresql
 
-          # 3. Configure PostgreSQL
+          # Configure PostgreSQL
           sudo -u postgres psql -c "CREATE USER plantcare_admin WITH PASSWORD '${DBPassword}';"
           sudo -u postgres psql -c "CREATE DATABASE plantcare OWNER plantcare_admin;"
           sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE plantcare TO plantcare_admin;"
 
           # Allow password auth for local connections
-          sed -i 's/ident$/md5/g' /var/lib/pgsql/data/pg_hba.conf
-          sed -i 's/peer$/md5/g' /var/lib/pgsql/data/pg_hba.conf
+          cp /var/lib/pgsql/data/pg_hba.conf /var/lib/pgsql/data/pg_hba.conf.bak
+          sed -i 's/ident/md5/g' /var/lib/pgsql/data/pg_hba.conf || true
+          sed -i 's/peer/md5/g' /var/lib/pgsql/data/pg_hba.conf || true
           systemctl restart postgresql
 
-          # 4. Install nginx
+          # Install nginx
           yum install -y nginx
 
-          # 5. Create application directory and user
+          # Create app directory and user
           useradd -r -s /bin/false plantcare || true
           mkdir -p /opt/plantcare
           chown plantcare:plantcare /opt/plantcare
 
-          # 6. Create environment file
-          cat > /opt/plantcare/.env << 'ENVEOF'
+          # Create environment file
+          cat > /opt/plantcare/.env << ENVEOF
           DB_HOST=localhost
           DB_PORT=5432
           DB_NAME=plantcare
@@ -237,7 +197,7 @@ Resources:
           chmod 600 /opt/plantcare/.env
           chown plantcare:plantcare /opt/plantcare/.env
 
-          # 7. Create systemd service
+          # Create systemd service
           cat > /etc/systemd/system/plantcare.service << 'SVCEOF'
           [Unit]
           Description=Plant Care Monitoring System
@@ -264,30 +224,26 @@ Resources:
           systemctl daemon-reload
           systemctl enable plantcare
 
-          # 8. Configure nginx reverse proxy
+          # Write nginx config (no shell variable substitution needed)
           cat > /etc/nginx/conf.d/plantcare.conf << 'NGXEOF'
           server {
               listen 80;
               server_name _;
-
               add_header X-Frame-Options "SAMEORIGIN" always;
               add_header X-Content-Type-Options "nosniff" always;
               add_header X-XSS-Protection "1; mode=block" always;
-              add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
               location /api/ {
                   proxy_pass http://127.0.0.1:8080/api/;
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_set_header Host ${!host};
+                  proxy_set_header X-Real-IP ${!remote_addr};
+                  proxy_set_header X-Forwarded-For ${!proxy_add_x_forwarded_for};
+                  proxy_set_header X-Forwarded-Proto ${!scheme};
                   proxy_read_timeout 90;
               }
-
               location /actuator/health {
                   proxy_pass http://127.0.0.1:8080/actuator/health;
               }
-
               location / {
                   return 200 'Plant Care Backend Running';
                   add_header Content-Type text/plain;
@@ -299,29 +255,16 @@ Resources:
           systemctl enable nginx
           systemctl start nginx
 
-          # 9. Install CloudWatch agent for logging
-          yum install -y amazon-cloudwatch-agent || true
-
-          # 10. Install security audit tools
-          yum install -y clamav clamav-update 2>/dev/null || true
-
           echo "=== EC2 Setup Complete ==="
 
-  # ──────────────────────────────────────────────
-  # 6. CloudWatch Log Group
-  # ──────────────────────────────────────────────
+  # ── CloudWatch ──
   AppLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /plantcare/${EnvironmentName}/application
       RetentionInDays: 7
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-logs
 
-  # ──────────────────────────────────────────────
-  # 7. S3 Bucket (Frontend Hosting)
-  # ──────────────────────────────────────────────
+  # ── S3 Bucket ──
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -334,13 +277,8 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-frontend
 
-  # ──────────────────────────────────────────────
-  # 8. CloudFront Distribution
-  # ──────────────────────────────────────────────
+  # ── CloudFront ──
   CloudFrontOAC:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
@@ -374,7 +312,6 @@ Resources:
         Enabled: true
         DefaultRootObject: index.html
         Comment: !Sub ${EnvironmentName} Frontend CDN
-
         Origins:
           - Id: S3Origin
             DomainName: !GetAtt FrontendBucket.RegionalDomainName
@@ -386,7 +323,6 @@ Resources:
             CustomOriginConfig:
               HTTPPort: 80
               OriginProtocolPolicy: http-only
-
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: redirect-to-https
@@ -395,7 +331,6 @@ Resources:
           ForwardedValues:
             QueryString: false
           Compress: true
-
         CacheBehaviors:
           - PathPattern: /api/*
             TargetOriginId: BackendOrigin
@@ -407,7 +342,6 @@ Resources:
                 - Authorization
                 - Content-Type
             CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
-
         CustomErrorResponses:
           - ErrorCode: 403
             ResponseCode: 200
@@ -415,56 +349,22 @@ Resources:
           - ErrorCode: 404
             ResponseCode: 200
             ResponsePagePath: /index.html
-
         PriceClass: PriceClass_100
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-cdn
 
-# ============================================================
-# Outputs
-# ============================================================
 Outputs:
   EC2PublicIP:
-    Description: EC2 instance public IP address
     Value: !GetAtt EC2Instance.PublicIp
-    Export:
-      Name: !Sub ${EnvironmentName}-ec2-ip
-
   EC2PublicDNS:
-    Description: EC2 instance public DNS
     Value: !GetAtt EC2Instance.PublicDnsName
-    Export:
-      Name: !Sub ${EnvironmentName}-ec2-dns
-
   S3BucketName:
-    Description: S3 bucket for frontend
     Value: !Ref FrontendBucket
-    Export:
-      Name: !Sub ${EnvironmentName}-s3-bucket
-
   CloudFrontDomainName:
-    Description: CloudFront distribution domain
     Value: !GetAtt CloudFrontDistribution.DomainName
-    Export:
-      Name: !Sub ${EnvironmentName}-cloudfront-domain
-
   CloudFrontDistributionId:
-    Description: CloudFront distribution ID
     Value: !Ref CloudFrontDistribution
-    Export:
-      Name: !Sub ${EnvironmentName}-cloudfront-id
-
   KeyPairId:
-    Description: EC2 Key Pair ID (private key in SSM Parameter Store)
     Value: !GetAtt EC2KeyPair.KeyPairId
-    Export:
-      Name: !Sub ${EnvironmentName}-keypair-id
-
   ApplicationURL:
-    Description: Public URL of the application
     Value: !Sub https://${CloudFrontDistribution.DomainName}
-
   CloudWatchLogGroup:
-    Description: CloudWatch log group for application logs
     Value: !Ref AppLogGroup
