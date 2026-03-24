@@ -33,6 +33,24 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # ── Clean up failed stack if exists ──
+      - name: Clean up failed stack
+        if: ${{ github.event.inputs.action == 'deploy' }}
+        run: |
+          STACK_STATUS=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].StackStatus' \
+            --output text 2>/dev/null) || STACK_STATUS="DOES_NOT_EXIST"
+
+          echo "Current stack status: $STACK_STATUS"
+
+          if [[ "$STACK_STATUS" == *"FAILED"* ]] || [[ "$STACK_STATUS" == *"ROLLBACK"* ]]; then
+            echo "Deleting failed stack..."
+            aws cloudformation delete-stack --stack-name ${{ env.STACK_NAME }}
+            aws cloudformation wait stack-delete-complete --stack-name ${{ env.STACK_NAME }}
+            echo "Failed stack deleted."
+          fi
+
       # ── Deploy Infrastructure ──
       - name: Deploy CloudFormation Stack
         if: ${{ github.event.inputs.action == 'deploy' }}
@@ -48,8 +66,7 @@ jobs:
             --no-fail-on-empty-changeset \
             --parameter-overrides \
               EnvironmentName=plantcare \
-              InstanceType=t2.micro \
-              DBInstanceClass=db.t3.micro
+              InstanceType=t2.micro
 
           echo ""
           echo "Stack deployment initiated. Waiting for completion..."
