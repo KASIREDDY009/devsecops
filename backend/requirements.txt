@@ -12,8 +12,9 @@ python-jose[cryptography]==3.3.0
 bcrypt==4.0.1
 
 # Request validation and settings management
-pydantic[email-validator]==2.9.2
+pydantic==2.9.2
 pydantic-settings==2.5.2
+email-validator==2.2.0
 
 # CORS and HTTP
 python-multipart==0.0.12
