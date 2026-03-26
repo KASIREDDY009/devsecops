@@ -51,6 +51,7 @@ jobs:
               --vpc-id $VPC_ID --query 'GroupId' --output text)
             aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 22 --cidr 0.0.0.0/0
             aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 80 --cidr 0.0.0.0/0
+            aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 443 --cidr 0.0.0.0/0
             aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 8080 --cidr 0.0.0.0/0
             echo "SG created: $SG_ID"
           fi
@@ -91,16 +92,21 @@ jobs:
             --names /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64 \
             --query 'Parameters[0].Value' --output text)
 
-          # User data script
+          # User data script - Python FastAPI setup
           cat > /tmp/setup.sh << 'EOF'
           #!/bin/bash
           set -ex
           exec > /var/log/user-data.log 2>&1
 
-          # Java 17
-          yum install -y java-17-amazon-corretto-headless
+          # Python 3.11 and pip
+          yum install -y python3.11 python3.11-pip python3.11-devel gcc
 
-          # PostgreSQL
+          # Create python3 symlink if needed
+          alternatives --set python3 /usr/bin/python3.11 2>/dev/null || true
+          ln -sf /usr/bin/python3.11 /usr/local/bin/python3
+          ln -sf /usr/bin/pip3.11 /usr/local/bin/pip3
+
+          # PostgreSQL 15
           yum install -y postgresql15-server postgresql15
           postgresql-setup --initdb
           systemctl enable postgresql && systemctl start postgresql
@@ -118,52 +124,70 @@ jobs:
           mkdir -p /opt/plantcare /var/www/plantcare
           chown plantcare:plantcare /opt/plantcare
 
-          # Env file
+          # Environment file for the FastAPI application
           cat > /opt/plantcare/.env << 'ENVFILE'
-          DB_HOST=localhost
-          DB_PORT=5432
-          DB_NAME=plantcare
-          DB_USER=plantcare
-          DB_PASSWORD=PlantCare2024
-          JWT_SECRET=cGxhbnRjYXJlSldUU2VjcmV0S2V5Rm9yUHJvZHVjdGlvbjIwMjRTZWN1cmVLZXk=
-          SPRING_PROFILES_ACTIVE=prod
-          SERVER_PORT=8080
+          DATABASE_URL=postgresql://plantcare:PlantCare2024@localhost:5432/plantcare
+          JWT_SECRET_KEY=cGxhbnRjYXJlSldUU2VjcmV0S2V5Rm9yUHJvZHVjdGlvbjIwMjRTZWN1cmVLZXk=
+          DEBUG=false
           ENVFILE
           chmod 600 /opt/plantcare/.env && chown plantcare:plantcare /opt/plantcare/.env
 
-          # Systemd service
+          # Systemd service for FastAPI with Uvicorn
           cat > /etc/systemd/system/plantcare.service << 'SVCFILE'
           [Unit]
-          Description=PlantCare Backend
+          Description=PlantCare FastAPI Backend
           After=network.target postgresql.service
+
           [Service]
           Type=simple
           User=plantcare
+          WorkingDirectory=/opt/plantcare
           EnvironmentFile=/opt/plantcare/.env
-          ExecStart=/usr/bin/java -jar /opt/plantcare/app.jar
+          ExecStart=/opt/plantcare/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8080
           Restart=on-failure
           RestartSec=10
+          SuccessExitStatus=143
+
           [Install]
           WantedBy=multi-user.target
           SVCFILE
           systemctl daemon-reload && systemctl enable plantcare
 
-          # Nginx: serve frontend + proxy API
+          # Nginx: serve frontend + proxy API to FastAPI backend
           cat > /etc/nginx/conf.d/plantcare.conf << 'NGXFILE'
           server {
               listen 80;
               root /var/www/plantcare;
               index index.html;
 
+              # Security headers
+              add_header X-Frame-Options "SAMEORIGIN" always;
+              add_header X-Content-Type-Options "nosniff" always;
+              add_header X-XSS-Protection "1; mode=block" always;
+              add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+              # Proxy API requests to FastAPI backend
               location /api/ {
                   proxy_pass http://127.0.0.1:8080/api/;
                   proxy_set_header Host $host;
                   proxy_set_header X-Real-IP $remote_addr;
                   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
               }
 
+              # Health check endpoint
+              location /actuator/health {
+                  proxy_pass http://127.0.0.1:8080/actuator/health;
+              }
+
+              # Serve React frontend with client-side routing
               location / {
                   try_files $uri $uri/ /index.html;
+              }
+
+              # Deny access to hidden files
+              location ~ /\. {
+                  deny all;
               }
           }
           NGXFILE

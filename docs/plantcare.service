@@ -1,5 +1,5 @@
 # =============================================================================
-# Systemd Service Unit — Plant Care Monitoring Backend
+# Systemd Service Unit — Plant Care Monitoring Backend (FastAPI)
 # =============================================================================
 # Install on EC2:
 #   sudo cp plantcare.service /etc/systemd/system/
@@ -9,8 +9,8 @@
 # =============================================================================
 
 [Unit]
-Description=Plant Care Monitoring System — Spring Boot Backend
-After=network.target
+Description=Plant Care Monitoring System — FastAPI Backend
+After=network.target postgresql.service
 
 [Service]
 Type=simple
@@ -18,18 +18,11 @@ User=plantcare
 Group=plantcare
 WorkingDirectory=/opt/plantcare
 
-ExecStart=/usr/bin/java -jar \
-    -Dspring.profiles.active=prod \
-    -Dserver.port=8080 \
-    /opt/plantcare/plantcare-app.jar
+# Run FastAPI with Uvicorn ASGI server
+ExecStart=/opt/plantcare/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8080
 
-# Environment variables for production
-Environment=DB_HOST=${DB_HOST}
-Environment=DB_PORT=5432
-Environment=DB_NAME=plantcare
-Environment=DB_USER=${DB_USER}
-Environment=DB_PASSWORD=${DB_PASSWORD}
-Environment=JWT_SECRET=${JWT_SECRET}
+# Load environment variables from file
+EnvironmentFile=/opt/plantcare/.env
 
 # Restart policy
 Restart=on-failure

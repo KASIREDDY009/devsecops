@@ -1,13 +1,15 @@
-# Java
-backend/target/
-*.class
-*.jar
-*.war
-
-# Maven
-backend/.mvn/
-backend/mvnw
-backend/mvnw.cmd
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+venv/
+backend/venv/
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
 
 # Node
 frontend/node_modules/

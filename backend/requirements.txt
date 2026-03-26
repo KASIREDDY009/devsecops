@@ -1,0 +1,19 @@
+# FastAPI framework and ASGI server
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+
+# Database ORM and PostgreSQL driver
+sqlalchemy==2.0.35
+psycopg2-binary==2.9.9
+alembic==1.13.2
+
+# Authentication: JWT tokens and password hashing
+python-jose[cryptography]==3.3.0
+bcrypt==4.0.1
+
+# Request validation and settings management
+pydantic[email-validator]==2.9.2
+pydantic-settings==2.5.2
+
+# CORS and HTTP
+python-multipart==0.0.12

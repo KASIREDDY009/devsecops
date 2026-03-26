@@ -3,7 +3,7 @@
 # EC2 Instance Setup Script
 # =============================================================================
 # Run this on a fresh Amazon Linux 2023 / Ubuntu EC2 instance to prepare it
-# for the Plant Care Monitoring System deployment.
+# for the Plant Care Monitoring System deployment (Python FastAPI backend).
 #
 # Usage: sudo bash ec2-setup.sh
 # =============================================================================
@@ -27,15 +27,15 @@ else
 fi
 
 # ─────────────────────────────────────────────────
-# 2. Install Java 17
+# 2. Install Python 3.11
 # ─────────────────────────────────────────────────
-echo "[2/6] Installing Java 17..."
+echo "[2/6] Installing Python 3.11..."
 if [ "$PKG_MANAGER" = "apt-get" ]; then
-    sudo apt-get install -y openjdk-17-jdk
+    sudo apt-get install -y python3.11 python3.11-venv python3-pip
 else
-    sudo yum install -y java-17-amazon-corretto-headless
+    sudo yum install -y python3.11 python3.11-pip python3.11-devel gcc
 fi
-java -version
+python3.11 --version
 
 # ─────────────────────────────────────────────────
 # 3. Install Nginx
@@ -48,7 +48,7 @@ sudo systemctl enable nginx
 # 4. Create application directory and user
 # ─────────────────────────────────────────────────
 echo "[4/6] Creating application directory..."
-sudo mkdir -p /opt/plantcare
+sudo mkdir -p /opt/plantcare /var/www/plantcare
 sudo useradd -r -s /bin/false plantcare 2>/dev/null || true
 sudo chown plantcare:plantcare /opt/plantcare
 
@@ -73,8 +73,8 @@ echo "  Setup Complete!"
 echo "============================================="
 echo "  Next steps:"
 echo "    1. Copy plantcare.service to /etc/systemd/system/"
-echo "    2. Configure environment variables in the service file"
-echo "    3. Deploy the JAR file to /opt/plantcare/"
-echo "    4. Run: sudo systemctl daemon-reload"
-echo "    5. Run: sudo systemctl start plantcare"
+echo "    2. Deploy backend to /opt/plantcare/"
+echo "    3. Create venv: python3.11 -m venv /opt/plantcare/venv"
+echo "    4. Install deps: /opt/plantcare/venv/bin/pip install -r requirements.txt"
+echo "    5. Run: sudo systemctl daemon-reload && sudo systemctl start plantcare"
 echo "============================================="
