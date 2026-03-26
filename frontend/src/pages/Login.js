@@ -116,13 +116,56 @@ const Login = () => {
     }
   };
 
+  /**
+   * Fills in the demo credentials and submits the login form.
+   * Allows the examiner to access the app with one click.
+   */
+  const handleDemoLogin = async () => {
+    setFormData({ username: 'examiner', password: 'PlantCare2024' });
+    setLoading(true);
+    setApiError('');
+    try {
+      const response = await api.post('/auth/login', {
+        username: 'examiner',
+        password: 'PlantCare2024',
+      });
+      const { token, username } = response.data;
+      login(token, { username });
+      navigate('/dashboard');
+    } catch (error) {
+      if (error.response && error.response.data) {
+        setApiError(error.response.data.message || 'Demo login failed.');
+      } else {
+        setApiError('Unable to connect to the server. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="login-container">
       <div className="login-card">
         {/* Header */}
         <div className="login-header">
           <h1 className="login-title">PlantCare Monitor</h1>
-          <p className="login-subtitle">Sign in to manage your plants</p>
+          <p className="login-subtitle">Automated Plant Care Monitoring System</p>
+          <p className="login-module">MSc Cloud DevOpsSec — National College of Ireland</p>
+        </div>
+
+        {/* Demo Credentials Box for Examiner Access */}
+        <div className="demo-credentials">
+          <p className="demo-title">Examiner Access</p>
+          <p className="demo-info">Username: <strong>examiner</strong></p>
+          <p className="demo-info">Password: <strong>PlantCare2024</strong></p>
+          <button
+            type="button"
+            className="demo-btn"
+            onClick={handleDemoLogin}
+            disabled={loading}
+          >
+            {loading ? 'Signing in...' : 'Login as Examiner'}
+          </button>
         </div>
 
         {/* Global API error message */}
