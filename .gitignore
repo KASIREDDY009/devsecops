@@ -47,3 +47,8 @@ zap-report.*
 rootkey.csv
 *.pem
 *.csv
+
+# Reports and screenshots (generated locally, not committed)
+reports/
+report/
+plantcare-report.zip
