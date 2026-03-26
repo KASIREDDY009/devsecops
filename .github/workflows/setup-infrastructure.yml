@@ -200,7 +200,7 @@ jobs:
           # Launch
           INSTANCE_ID=$(aws ec2 run-instances \
             --image-id $AMI_ID \
-            --instance-type t2.micro \
+            --instance-type t3.micro \
             --key-name ${{ env.APP_NAME }}-key \
             --security-group-ids ${{ steps.sg.outputs.sg_id }} \
             --user-data file:///tmp/setup.sh \
