@@ -84,7 +84,77 @@ jobs:
           if-no-files-found: ignore
 
   # ──────────────────────────────────────────────
-  # Job 2: Static Analysis
+  # Job 2: Playwright E2E Tests
+  # ──────────────────────────────────────────────
+  e2e-tests:
+    name: Playwright E2E Tests
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # Start the backend API server with SQLite for testing
+      - name: Backend - Install dependencies
+        run: pip install -r requirements.txt
+        working-directory: backend/
+
+      - name: Backend - Start test server
+        run: |
+          DATABASE_URL=sqlite:///./test.db uvicorn app.main:app --host 0.0.0.0 --port 8080 &
+          sleep 5
+          curl -s http://localhost:8080/actuator/health || echo "Backend starting..."
+        working-directory: backend/
+
+      # Build and serve the frontend
+      - name: Frontend - Install and build
+        run: npm install && REACT_APP_API_URL=http://localhost:8080/api npm run build
+        working-directory: frontend/
+
+      - name: Frontend - Serve build
+        run: |
+          npx serve -s build -l 3000 &
+          sleep 3
+        working-directory: frontend/
+
+      # Run Playwright E2E tests
+      - name: E2E - Install dependencies
+        run: npm install
+        working-directory: e2e/
+
+      - name: E2E - Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: e2e/
+
+      - name: E2E - Run Playwright tests
+        run: npx playwright test --reporter=list,html,json
+        working-directory: e2e/
+        env:
+          BASE_URL: http://localhost:3000
+
+      - name: Upload Playwright Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results.json
+          if-no-files-found: ignore
+
+  # ──────────────────────────────────────────────
+  # Job 3: Static Analysis
   # ──────────────────────────────────────────────
   static-analysis:
     name: Static Analysis
