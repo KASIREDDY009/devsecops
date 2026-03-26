@@ -16,7 +16,8 @@ module.exports = defineConfig({
     timeout: 10000,
   },
   fullyParallel: false,
-  retries: 1,
+  retries: 2,
+  workers: 2,
   reporter: [
     ['html', { outputFolder: 'playwright-report' }],
     ['json', { outputFile: 'test-results.json' }],

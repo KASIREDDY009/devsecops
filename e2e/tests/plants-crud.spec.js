@@ -51,8 +51,12 @@ test.describe('Plant CRUD Operations', () => {
   test('should validate required fields on add plant form', async ({ page }) => {
     await loginFreshUser(page);
     await page.goto('/add-plant');
+    await page.locator('#name').click();
+    await page.locator('#species').click();
     await page.click('button[type="submit"]');
-    await expect(page.locator('.field-error')).toHaveCount({ minimum: 1 });
+    await page.waitForTimeout(500);
+    const errors = page.locator('.field-error');
+    await expect(errors.first()).toBeVisible({ timeout: 5000 });
   });
 
   test('should reject invalid watering frequency (out of range)', async ({ page }) => {
@@ -125,15 +129,19 @@ test.describe('Plant CRUD Operations', () => {
     await page.click('text=Edit');
     await expect(page).toHaveURL(/\/edit/);
 
-    // Update the plant name and location
+    // Clear and update the plant name and location
+    await page.locator('#name').clear();
     await page.fill('#name', 'Updated Cactus');
+    await page.locator('#location').clear();
     await page.fill('#location', 'Window Sill');
+    await page.locator('#wateringFrequencyDays').clear();
     await page.fill('#wateringFrequencyDays', '21');
     await page.click('button[type="submit"]');
 
     // Should show success and redirect to detail page
-    await expect(page.locator('.success-banner')).toBeVisible({ timeout: 5000 });
-    await page.waitForTimeout(2000);
+    await expect(page.locator('.success-banner')).toBeVisible({ timeout: 10000 });
+    // Wait for redirect
+    await page.waitForURL(/\/plants\/\d+$/, { timeout: 15000 });
 
     // Verify the update on detail page
     await expect(page.locator('h1')).toContainText('Updated Cactus');
@@ -154,14 +162,15 @@ test.describe('Plant CRUD Operations', () => {
 
     // Go to detail page
     await page.click('text=Delete Me Plant');
+    await expect(page.locator('h1')).toContainText('Delete Me Plant', { timeout: 10000 });
 
-    // Accept the confirmation dialog automatically
+    // Set up dialog handler BEFORE clicking delete
     page.on('dialog', async (dialog) => {
       await dialog.accept();
     });
 
     // Click delete
-    await page.click('text=Delete');
+    await page.click('button:has-text("Delete")');
 
     // Should redirect to dashboard and plant should be gone
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });

@@ -36,8 +36,14 @@ test.describe('User Registration', () => {
   });
 
   test('should show validation errors for empty fields', async ({ page }) => {
+    // Focus and blur a field to ensure React state is initialized
+    await page.locator('#username').click();
+    await page.locator('#password').click();
     await page.click('button[type="submit"]');
-    await expect(page.locator('.field-error')).toHaveCount({ minimum: 1 });
+    // Wait for validation to fire
+    await page.waitForTimeout(500);
+    const errors = page.locator('.field-error');
+    await expect(errors.first()).toBeVisible({ timeout: 5000 });
   });
 
   test('should reject short username (less than 3 characters)', async ({ page }) => {
@@ -106,8 +112,12 @@ test.describe('User Login', () => {
   });
 
   test('should show validation errors for empty fields', async ({ page }) => {
+    await page.locator('#username').click();
+    await page.locator('#password').click();
     await page.click('button[type="submit"]');
-    await expect(page.locator('.field-error')).toHaveCount({ minimum: 1 });
+    await page.waitForTimeout(500);
+    const errors = page.locator('.field-error');
+    await expect(errors.first()).toBeVisible({ timeout: 5000 });
   });
 
   test('should show error for invalid credentials', async ({ page }) => {

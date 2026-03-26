@@ -70,8 +70,12 @@ test.describe('Sensor Data Management', () => {
   test('should validate empty sensor data fields', async ({ page }) => {
     await setupPlantForSensor(page);
     await page.click('text=View All / Add Data');
+    await page.locator('#soilMoisture').click();
+    await page.locator('#temperature').click();
     await page.click('button:has-text("Add Reading")');
-    await expect(page.locator('.field-error')).toHaveCount({ minimum: 1 });
+    await page.waitForTimeout(500);
+    const errors = page.locator('.field-error');
+    await expect(errors.first()).toBeVisible({ timeout: 5000 });
   });
 
   test('should reject out-of-range soil moisture value', async ({ page }) => {

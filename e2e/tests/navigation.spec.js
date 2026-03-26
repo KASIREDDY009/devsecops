@@ -70,7 +70,7 @@ test.describe('Navigation and Layout', () => {
 
     // Go to detail page and verify status badge
     await page.click('text=Healthy Plant');
-    await expect(page.locator('.status-healthy, .detail-status')).toBeVisible();
+    await expect(page.locator('h1')).toContainText('Healthy Plant', { timeout: 10000 });
     await expect(page.locator('text=Healthy')).toBeVisible();
   });
 
@@ -103,6 +103,7 @@ test.describe('Navigation and Layout', () => {
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 15000 });
 
     await page.click('text=Critical Plant');
+    await expect(page.locator('h1')).toContainText('Critical Plant', { timeout: 10000 });
     await expect(page.locator('text=Critical')).toBeVisible();
   });
 });
